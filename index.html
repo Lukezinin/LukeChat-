@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Luke's Chat</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { darkMode: 'class' };
+  </script>
+  <style>
+    #messages { scroll-behavior: smooth; }
+  </style>
+</head>
+<body class="h-full bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100">
+  <div class="min-h-screen flex flex-col">
+    <header class="sticky top-0 z-10 bg-white/90 dark:bg-gray-900/80 border-b border-gray-200 dark:border-gray-800">
+      <div class="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
+        <div class="flex items-center gap-2 font-bold text-xl">
+          <span class="text-2xl">💬</span>
+          <span>Luke's Chat</span>
+        </div>
+        <div class="ml-auto flex items-center gap-2">
+          <input id="displayName" class="w-40 sm:w-56 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm" placeholder="Seu nome" />
+          <button id="saveNameBtn" class="px-3 py-1.5 rounded-xl text-sm border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800">Salvar nome</button>
+          <button id="themeBtn" class="px-3 py-1.5 rounded-xl text-sm border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800" title="Alternar tema">🌓</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="flex-1">
+      <div class="max-w-5xl mx-auto px-4 py-4 grid gap-4">
+        <section class="rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+          <div id="messages" class="h-[60vh] sm:h-[70vh] overflow-y-auto bg-white dark:bg-gray-950 p-3">
+            <div id="emptyState" class="h-full flex items-center justify-center text-gray-500 text-sm">
+              Conectando ao chat…
+            </div>
+          </div>
+          <div class="p-3 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 flex gap-2">
+            <input id="messageInput" class="flex-1 px-4 py-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 outline-none" placeholder="Escreva uma mensagem e pressione Enter…" maxlength="500" />
+            <button id="sendBtn" class="px-4 py-3 rounded-xl font-medium border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800">Enviar</button>
+          </div>
+        </section>
+        <p class="text-xs text-gray-500">💡 Hospede este arquivo no GitHub Pages e conecte ao servidor WebSocket no Render.</p>
+      </div>
+    </main>
+
+    <footer class="py-6 text-center text-xs text-gray-500">Feito com ❤ — Luke's Chat</footer>
+  </div>
+
+  <script>
+    // ======== Tema (claro/escuro) ========
+    const themeBtn = document.getElementById('themeBtn');
+    const userTheme = localStorage.getItem('theme');
+    if (userTheme === 'dark' || (!userTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      document.documentElement.classList.add('dark');
+    }
+    themeBtn.addEventListener('click', () => {
+      const isDark = document.documentElement.classList.toggle('dark');
+      localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    });
+
+    // ======== Nome de exibição ========
+    const nameInput = document.getElementById('displayName');
+    const saveNameBtn = document.getElementById('saveNameBtn');
+    function randomName() {
+      const animals = ['Fox','Cat','Dog','Panda','Tiger','Wolf','Owl','Lion'];
+      return 'Guest-' + animals[Math.floor(Math.random()*animals.length)] + '-' + Math.floor(Math.random()*1000);
+    }
+    const savedName = localStorage.getItem('lukechat:name') || randomName();
+    nameInput.value = savedName;
+    saveNameBtn.addEventListener('click', () => {
+      const v = nameInput.value.trim();
+      if (v.length < 2) return alert('Nome muito curto.');
+      localStorage.setItem('lukechat:name', v);
+      alert('Nome salvo!');
+    });
+
+    // ======== WebSocket ========
+    // Substitua pela URL do seu servidor Render
+    const ws = new WebSocket("wss://render-luke-s-chat-server.onrender.com");
+
+    ws.onopen = () => {
+      document.getElementById('emptyState').textContent = 'Conectado!';
+    };
+
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      renderMessage(msg);
+    };
+
+    ws.onerror = () => {
+      document.getElementById('emptyState').textContent = 'Erro de conexão.';
+    };
+
+    const messagesEl = document.getElementById('messages');
+    const inputEl = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+
+    function send() {
+      const text = inputEl.value.trim();
+      if (!text) return;
+      inputEl.value = '';
+      const name = (localStorage.getItem('lukechat:name') || 'Guest').slice(0, 40);
+      ws.send(JSON.stringify({ text, name, time: Date.now() }));
+    }
+
+    sendBtn.addEventListener('click', send);
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        send();
+      }
+    });
+
+    function renderMessage(m) {
+      document.getElementById('emptyState')?.remove();
+      const wrapper = document.createElement('div');
+      wrapper.className = 'px-3 py-2';
+      const bubble = document.createElement('div');
+      bubble.className = 'mr-auto max-w-[80%] rounded-2xl rounded-tl-sm bg-gray-100 dark:bg-gray-800 px-4 py-2 shadow-sm';
+
+      const head = document.createElement('div');
+      head.className = 'flex items-baseline gap-2 text-xs opacity-80 mb-1';
+      const name = document.createElement('span');
+      name.textContent = m.name || 'Anônimo';
+      const time = document.createElement('span');
+      time.textContent = new Date(m.time).toLocaleTimeString();
+      head.append(name, document.createTextNode(' • '), time);
+
+      const text = document.createElement('div');
+      text.className = 'whitespace-pre-wrap break-words';
+      text.textContent = m.text || '';
+
+      bubble.append(head, text);
+      wrapper.append(bubble);
+      messagesEl.appendChild(wrapper);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+  </script>
+</body>
+</html>
